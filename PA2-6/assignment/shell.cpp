@@ -56,18 +56,24 @@ using namespace std;
  */
 void print_prompt() {
     // Use time() to obtain the current system time, and localtime() to parse the raw time data
-    time();
+    time_t raw_time;
+    struct tm* time_info;
+    char time_buffer[16];
+    time(&raw_time);
+    time_info = localtime(&raw_time);
 
     // Parse date time string from raw time data using strftime()
     // Date-Time format will be in the format (MMM DD hh:mm:ss), with a constant size of 15 characters requiring 16 bytes to output
-    strftime();
+    strftime(time_buffer, sizeof(time_buffer), "%b %d %H:%M:%S", time_info);
 
     // Obtain current user and current working directory by calling getenv() and obtaining the "USER" and "PWD" environment variables
-    getenv();
+    char* user = getenv("USER");
+    char cwd[PATH_MAX];
+    getcwd(cwd, sizeof(cwd));
 
     // Can use colored #define's to change output color by inserting into output stream
     // MODIFY to output a prompt format that has at least the USER and CURRENT WORKING DIRECTORY
-    std::cout << YELLOW << "shell" << NC << " ";
+    std::cout << YELLOW << "[" << time_buffer << "] " << user << ":" << cwd << "$ " << NC;
 }
 
 
@@ -78,21 +84,32 @@ void print_prompt() {
  * Example: `ls -l / | grep etc`    ::  This command will list (in detailed list form `-l`) the root directory and then pipe into a filter for `etc`
  * When parsed into the Tokenizer, this will split into two separate commands, `ls -l /` and `grep etc`.
  */
-void process_commands() {
+void process_commands(Tokenizer& tknr) {
     // Declare file descriptor variables for storing unnamed pipe fd's
     // Maintain both a FORWARD and BACKWARDS pipe in the parent for command redirection
-    backwards_fds;
-    forwards_fds;
+    int backwards_fds[2], forwards_fds[2];
 
     // LOOP THROUGH COMMANDS FROM SHELL INPUT
-    for (command in tknr) {
+    for (size_t i = 0; i < tknr.commands.size(); ++i) {
         // Check if the command is 'cd' first
         // This will not have any pipe logic and needs to be done manually since 'cd' is not an executable command
         // Use getenv(), setenv(), and chdir() here to implement this command
-        if (command == "cd") {
+        Command* command = tknr.commands.at(i);
+         if (command->args[0] == "cd") {
             // There are two tested inputs for 'cd':
             // (1) User provides "cd -", which directs to the previous directory that was opened
             // (2) User provides a directory to open
+            if (command->args.size() > 1) {
+                if (command->args[1] == "-") {
+                    char* prev_dir = getenv("OLDPWD");
+                    chdir(prev_dir);
+                    setenv("PWD", prev_dir, 1);
+                }else{
+                    chdir(command->args[1].c_str());
+                    setenv("PWD", getcwd(nullptr, 0), 1);
+                }
+            }
+         }
 
             continue;
         }
